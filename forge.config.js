@@ -26,6 +26,7 @@ module.exports = {
               name: 'main_window',
               preload: {
                 js: './preload.js',
+                config: './webpack.preload.config.js',
               },
             },
           ],
