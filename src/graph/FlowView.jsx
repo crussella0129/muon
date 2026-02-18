@@ -4,17 +4,16 @@ import ReactFlow, {
   Controls,
   MiniMap,
   useReactFlow,
-  addEdge as rfAddEdge,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import WindowNode from './WindowNode';
+import FlowScreenNode from './FlowScreenNode';
 import { navigationEdge, ipcEdge, stateEdge } from './edgeTypes';
 import useProjectStore from '../stores/projectStore';
 
-const nodeTypes = { windowNode: WindowNode };
+const nodeTypes = { flowScreenNode: FlowScreenNode };
 const edgeTypes = { navigationEdge, ipcEdge, stateEdge };
 
-export default function GraphView() {
+export default function FlowView() {
   const reactFlowWrapper = useRef(null);
   const { screenToFlowPosition } = useReactFlow();
 
@@ -22,12 +21,15 @@ export default function GraphView() {
   const edges = useProjectStore((s) => s.getEdges());
   const addNode = useProjectStore((s) => s.addNode);
   const addEdge = useProjectStore((s) => s.addEdge);
+  const setComponentAction = useProjectStore((s) => s.setComponentAction);
   const removeNode = useProjectStore((s) => s.removeNode);
   const removeEdge = useProjectStore((s) => s.removeEdge);
   const updateNodePosition = useProjectStore((s) => s.updateNodePosition);
   const selectNode = useProjectStore((s) => s.selectNode);
   const selectEdge = useProjectStore((s) => s.selectEdge);
   const clearSelection = useProjectStore((s) => s.clearSelection);
+  const setActiveScreenId = useProjectStore((s) => s.setActiveScreenId);
+  const setViewMode = useProjectStore((s) => s.setViewMode);
 
   const onNodesChange = useCallback(
     (changes) => {
@@ -47,18 +49,34 @@ export default function GraphView() {
     (changes) => {
       changes.forEach((change) => {
         if (change.type === 'remove') {
-          removeEdge(change.id);
+          // If this edge has a sourceHandle, clear the navigate action on that button
+          const edge = edges.find((e) => e.id === change.id);
+          if (edge && edge.sourceHandle) {
+            setComponentAction(edge.source, edge.sourceHandle, 'onClick', null);
+          } else {
+            removeEdge(change.id);
+          }
         }
       });
     },
-    [removeEdge]
+    [removeEdge, edges, setComponentAction]
   );
 
   const onConnect = useCallback(
     (params) => {
-      addEdge(params);
+      if (params.sourceHandle) {
+        // Edge drawn from a button handle → set navigate action on that button
+        // setComponentAction handles both the component update AND edge creation
+        setComponentAction(params.source, params.sourceHandle, 'onClick', {
+          type: 'navigate',
+          target: params.target,
+        });
+      } else {
+        // Edge drawn from generic handle → just create a plain edge
+        addEdge(params);
+      }
     },
-    [addEdge]
+    [addEdge, setComponentAction]
   );
 
   const onNodeClick = useCallback(
@@ -66,6 +84,14 @@ export default function GraphView() {
       selectNode(node.id);
     },
     [selectNode]
+  );
+
+  const onNodeDoubleClick = useCallback(
+    (_event, node) => {
+      setActiveScreenId(node.id);
+      setViewMode('editor');
+    },
+    [setActiveScreenId, setViewMode]
   );
 
   const onEdgeClick = useCallback(
@@ -82,8 +108,6 @@ export default function GraphView() {
   const onContextMenu = useCallback(
     (event) => {
       event.preventDefault();
-
-      // Check if we right-clicked on a node or edge (don't show add menu)
       const targetNode = event.target.closest('.react-flow__node');
       if (targetNode) return;
 
@@ -107,12 +131,12 @@ export default function GraphView() {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeClick={onNodeClick}
+        onNodeDoubleClick={onNodeDoubleClick}
         onEdgeClick={onEdgeClick}
         onPaneClick={onPaneClick}
         onContextMenu={onContextMenu}
-        fitView
         snapToGrid
-        snapGrid={[16, 16]}
+        snapGrid={[8, 8]}
         deleteKeyCode="Delete"
         defaultEdgeOptions={{
           type: 'navigationEdge',
@@ -131,7 +155,7 @@ export default function GraphView() {
           style={{ background: '#1e293b', borderColor: '#334155' }}
         />
       </ReactFlow>
-      <div className="graph-hint">Right-click to add a window</div>
+      <div className="graph-hint">Right-click to add a screen. Double-click to edit.</div>
     </div>
   );
 }

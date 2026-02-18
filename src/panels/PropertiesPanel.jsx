@@ -1,23 +1,42 @@
 import React, { useCallback } from 'react';
 import useProjectStore from '../stores/projectStore';
+import ComponentProperties from './ComponentProperties';
 
 export default function PropertiesPanel() {
   const selectedNodeId = useProjectStore((s) => s.selectedNodeId);
   const selectedEdgeId = useProjectStore((s) => s.selectedEdgeId);
+  const selectedComponentId = useProjectStore((s) => s.selectedComponentId);
+  const selectedComponentWindowId = useProjectStore((s) => s.selectedComponentWindowId);
+  const activeScreenId = useProjectStore((s) => s.activeScreenId);
+  const viewMode = useProjectStore((s) => s.viewMode);
   const project = useProjectStore((s) => s.project);
   const updateWindowConfig = useProjectStore((s) => s.updateWindowConfig);
   const updateEdge = useProjectStore((s) => s.updateEdge);
   const removeNode = useProjectStore((s) => s.removeNode);
   const removeEdge = useProjectStore((s) => s.removeEdge);
 
+  // Priority: component > node > edge > active screen (editor mode) > empty
+  if (selectedComponentId && selectedComponentWindowId) {
+    return (
+      <div className="properties-panel">
+        <ComponentProperties
+          windowId={selectedComponentWindowId}
+          componentId={selectedComponentId}
+        />
+      </div>
+    );
+  }
+
   if (selectedNodeId && project.windows[selectedNodeId]) {
     return (
-      <NodeProperties
-        nodeId={selectedNodeId}
-        config={project.windows[selectedNodeId]}
-        onUpdate={updateWindowConfig}
-        onDelete={removeNode}
-      />
+      <div className="properties-panel">
+        <NodeProperties
+          nodeId={selectedNodeId}
+          config={project.windows[selectedNodeId]}
+          onUpdate={updateWindowConfig}
+          onDelete={removeNode}
+        />
+      </div>
     );
   }
 
@@ -25,16 +44,38 @@ export default function PropertiesPanel() {
     const edge = project.graph.edges.find((e) => e.id === selectedEdgeId);
     if (edge) {
       return (
-        <EdgeProperties
-          edge={edge}
-          onUpdate={updateEdge}
-          onDelete={removeEdge}
-        />
+        <div className="properties-panel">
+          <EdgeProperties
+            edge={edge}
+            onUpdate={updateEdge}
+            onDelete={removeEdge}
+          />
+        </div>
       );
     }
   }
 
-  return null;
+  // In editor mode, show active screen's properties when nothing else selected
+  if (viewMode === 'editor' && activeScreenId && project.windows[activeScreenId]) {
+    return (
+      <div className="properties-panel">
+        <NodeProperties
+          nodeId={activeScreenId}
+          config={project.windows[activeScreenId]}
+          onUpdate={updateWindowConfig}
+          onDelete={removeNode}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="properties-panel">
+      <div className="panel-empty">
+        Select a screen or component to see its properties.
+      </div>
+    </div>
+  );
 }
 
 function NodeProperties({ nodeId, config, onUpdate, onDelete }) {
@@ -56,7 +97,7 @@ function NodeProperties({ nodeId, config, onUpdate, onDelete }) {
   );
 
   return (
-    <div className="properties-panel">
+    <>
       <div className="panel-header">
         <h3>Window Properties</h3>
         <button
@@ -179,13 +220,13 @@ function NodeProperties({ nodeId, config, onUpdate, onDelete }) {
           }
         />
       </div>
-    </div>
+    </>
   );
 }
 
 function EdgeProperties({ edge, onUpdate, onDelete }) {
   return (
-    <div className="properties-panel">
+    <>
       <div className="panel-header">
         <h3>Edge Properties</h3>
         <button
@@ -230,7 +271,7 @@ function EdgeProperties({ edge, onUpdate, onDelete }) {
           <strong>Target:</strong> {edge.target}
         </p>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -258,7 +299,7 @@ function ChannelList({ label, channels, onChange }) {
         <div key={i} className="channel-item">
           <span>{ch}</span>
           <button className="btn-remove" onClick={() => removeChannel(i)}>
-            ×
+            x
           </button>
         </div>
       ))}

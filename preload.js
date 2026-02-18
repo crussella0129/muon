@@ -34,4 +34,24 @@ contextBridge.exposeInMainWorld('muonAPI', {
     ipcRenderer.on('menu:redo', () => callback());
     return () => ipcRenderer.removeAllListeners('menu:redo');
   },
+
+  // Codegen
+  selectDirectory: () => ipcRenderer.invoke('dialog:select-directory'),
+  generateFiles: (outputDir, files) =>
+    ipcRenderer.invoke('codegen:write-files', { outputDir, files }),
+  buildAndRun: (outputDir) =>
+    ipcRenderer.invoke('codegen:build-run', { outputDir }),
+  killProcess: () => ipcRenderer.invoke('codegen:kill-process'),
+  onCodegenProgress: (callback) => {
+    ipcRenderer.on('codegen:progress', (_event, data) => callback(data));
+    return () => ipcRenderer.removeAllListeners('codegen:progress');
+  },
+  onCodegenOutput: (callback) => {
+    ipcRenderer.on('codegen:output', (_event, data) => callback(data));
+    return () => ipcRenderer.removeAllListeners('codegen:output');
+  },
+  onCodegenProcessExit: (callback) => {
+    ipcRenderer.on('codegen:process-exit', (_event, data) => callback(data));
+    return () => ipcRenderer.removeAllListeners('codegen:process-exit');
+  },
 });

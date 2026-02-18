@@ -1,5 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
+const path = require('path');
 const fs = require('fs');
+const { spawn } = require('child_process');
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
@@ -125,6 +127,108 @@ ipcMain.handle('fs:write-file', async (_event, { filePath, content }) => {
 ipcMain.handle('fs:read-file', async (_event, { filePath }) => {
   const content = fs.readFileSync(filePath, 'utf-8');
   return content;
+});
+
+// --- Codegen IPC handlers ---
+
+ipcMain.handle('dialog:select-directory', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+    title: 'Select Output Directory',
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (canceled || filePaths.length === 0) return null;
+  return filePaths[0];
+});
+
+ipcMain.handle('codegen:write-files', async (_event, { outputDir, files }) => {
+  const written = [];
+  for (let i = 0; i < files.length; i++) {
+    const { path: relPath, content } = files[i];
+    const fullPath = path.join(outputDir, relPath);
+    const dir = path.dirname(fullPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(fullPath, content, 'utf-8');
+    written.push(relPath);
+
+    // Send progress to renderer
+    mainWindow.webContents.send('codegen:progress', {
+      current: i + 1,
+      total: files.length,
+      file: relPath,
+    });
+  }
+  return { success: true, written };
+});
+
+let buildProcess = null;
+
+ipcMain.handle('codegen:build-run', async (_event, { outputDir }) => {
+  if (buildProcess) {
+    return { error: 'A build process is already running.' };
+  }
+
+  const isWin = process.platform === 'win32';
+  const npmCmd = isWin ? 'npm.cmd' : 'npm';
+
+  // Run npm install && npm start
+  buildProcess = spawn(npmCmd, ['install'], { cwd: outputDir, shell: false });
+
+  buildProcess.stdout.on('data', (data) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('codegen:output', data.toString());
+    }
+  });
+
+  buildProcess.stderr.on('data', (data) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('codegen:output', data.toString());
+    }
+  });
+
+  buildProcess.on('close', (code) => {
+    if (code !== 0) {
+      buildProcess = null;
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('codegen:process-exit', { phase: 'install', code });
+      }
+      return;
+    }
+
+    // npm install succeeded — now run npm start
+    buildProcess = spawn(npmCmd, ['start'], { cwd: outputDir, shell: false });
+
+    buildProcess.stdout.on('data', (data) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('codegen:output', data.toString());
+      }
+    });
+
+    buildProcess.stderr.on('data', (data) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('codegen:output', data.toString());
+      }
+    });
+
+    buildProcess.on('close', (startCode) => {
+      buildProcess = null;
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('codegen:process-exit', { phase: 'start', code: startCode });
+      }
+    });
+  });
+
+  return { success: true, pid: buildProcess.pid };
+});
+
+ipcMain.handle('codegen:kill-process', async () => {
+  if (buildProcess) {
+    buildProcess.kill();
+    buildProcess = null;
+    return { killed: true };
+  }
+  return { killed: false };
 });
 
 app.whenReady().then(() => {

@@ -17,9 +17,11 @@ export function createDefaultProject() {
         transparent: false,
         alwaysOnTop: false,
         backgroundColor: '#ffffff',
+        layoutMode: 'flow',
         menu: null,
         component: null,
         ipc: { listens: [], emits: [] },
+        children: [],
       },
     },
     menus: {},
@@ -44,9 +46,11 @@ export function createWindowNode(id) {
     transparent: false,
     alwaysOnTop: false,
     backgroundColor: '#ffffff',
+    layoutMode: 'flow',
     menu: null,
     component: null,
     ipc: { listens: [], emits: [] },
+    children: [],
   };
 }
 

@@ -13,6 +13,7 @@ function BaseEdge({
   label,
   style = {},
   markerEnd,
+  selected,
 }) {
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
@@ -25,11 +26,22 @@ function BaseEdge({
 
   return (
     <>
+      {/* Invisible wider path for easier click/selection */}
+      <path
+        d={edgePath}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={20}
+        className="react-flow__edge-interaction"
+      />
       <path
         id={id}
         className="react-flow__edge-path"
         d={edgePath}
-        style={style}
+        style={{
+          ...style,
+          ...(selected ? { stroke: '#f59e0b', strokeWidth: 3, filter: 'drop-shadow(0 0 4px rgba(245, 158, 11, 0.5))' } : {}),
+        }}
         markerEnd={markerEnd}
       />
       {label && (
